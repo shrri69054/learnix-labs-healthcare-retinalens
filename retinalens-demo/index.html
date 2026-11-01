@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RetinaLens: glaucoma screening from retinal images</title>
+<meta name="description" content="Deep learning pipeline that screens retinal fundus images for referable glaucoma, with Grad-CAM explanations.">
+<style>
+  :root{--bg:#f3f5f4;--ink:#14232b;--muted:#5b6b72;--line:#d3dcda;--panel:#fff;--accent:#0b6e6e;--accent-ink:#fff;--code:#e8eeed}
+  @media (prefers-color-scheme:dark){:root{--bg:#0f1a1f;--ink:#e7efee;--muted:#93a5ab;--line:#26363c;--panel:#16252b;--accent:#4fc0b8;--accent-ink:#08201f;--code:#0b1418}}
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 "Inter","Segoe UI",system-ui,sans-serif}
+  .wrap{max-width:980px;margin:0 auto;padding:0 20px}
+  header{padding:72px 0 40px;border-bottom:1px solid var(--line)}
+  h1{font:600 clamp(2.4rem,6vw,3.8rem)/1.05 Georgia,"Times New Roman",serif;margin:0 0 16px;letter-spacing:-.02em}
+  h2{font:600 1.6rem/1.2 Georgia,serif;margin:0 0 10px}
+  .lead{font-size:1.15rem;color:var(--muted);max-width:58ch;margin:0 0 26px}
+  .btn{display:inline-block;background:var(--accent);color:var(--accent-ink);padding:11px 22px;border-radius:8px;font-weight:600;text-decoration:none;margin-right:10px}
+  .btn.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}
+  .btn:focus-visible,a:focus-visible,button:focus-visible,#drop:focus-visible{outline:3px solid var(--accent);outline-offset:3px}
+  section{padding:48px 0;border-bottom:1px solid var(--line)}
+  p{max-width:68ch}
+  .muted{color:var(--muted)}
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;margin-top:22px}
+  .stat{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px}
+  .stat b{display:block;font:600 1.7rem Georgia,serif}
+  .stat span{color:var(--muted);font-size:.9rem}
+  ol.flow{list-style:none;padding:0;margin:22px 0 0;display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;counter-reset:s}
+  ol.flow li{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;counter-increment:s}
+  ol.flow li::before{content:counter(s);display:inline-grid;place-items:center;width:26px;height:26px;border-radius:50%;background:var(--accent);color:var(--accent-ink);font-weight:700;font-size:.85rem;margin-bottom:8px}
+  ol.flow strong{display:block}
+  ol.flow span{color:var(--muted);font-size:.9rem}
+  #drop{border:1.5px dashed var(--accent);border-radius:14px;background:var(--panel);padding:30px 20px;text-align:center;cursor:pointer;margin-top:18px}
+  #drop.over{background:var(--code)}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-top:20px}
+  figure{margin:0;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px}
+  figure canvas{width:100%;height:auto;border-radius:8px;display:block;background:#000}
+  figcaption{color:var(--muted);font-size:.85rem;padding-top:8px}
+  #lab{display:none}
+  pre{background:var(--code);border:1px solid var(--line);border-radius:10px;padding:16px;overflow-x:auto;font:.9rem/1.5 ui-monospace,Consolas,monospace;margin:14px 0 0}
+  footer{padding:32px 0 56px;color:var(--muted);font-size:.85rem}
+</style>
+</head>
+<body>
+<header><div class="wrap">
+  <h1>RetinaLens</h1>
+  <p class="lead">A deep learning pipeline that screens retinal fundus photographs for referable glaucoma and shows which regions of the eye drove each decision.</p>
+  <a class="btn" href="https://github.com/shrri69054/learnix-labs-healthcare-retinalens">View code on GitHub</a>
+  <a class="btn ghost" href="#lab">Try the preprocessing lab</a>
+</div></header>
+
+<main class="wrap">
+  <section>
+    <h2>The problem</h2>
+    <p>Glaucoma damages the optic nerve and often causes no symptoms until vision is already lost. Screening programs capture fundus photos, but specialists are scarce. RetinaLens classifies each photo as referable glaucoma (RG) or non-referable (NRG) so likely cases can be sent to a clinician sooner.</p>
+    <div class="stats">
+      <div class="stat"><b>9,540</b><span>fundus images in the metadata</span></div>
+      <div class="stat"><b>2</b><span>classes: RG and NRG</span></div>
+      <div class="stat"><b>4,000 / 385 / 385</b><span>train, validation, test images per class</span></div>
+      <div class="stat"><b>3</b><span>preprocessing variants: crop, pad, raw</span></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>How it works</h2>
+    <ol class="flow">
+      <li><strong>Preprocess</strong><span>Resize to 224×224, normalize, augment with flips, rotation and color jitter.</span></li>
+      <li><strong>Classify</strong><span>EfficientNet-B0 pretrained on ImageNet, fine-tuned for one glaucoma probability.</span></li>
+      <li><strong>Choose threshold</strong><span>Decision cut-off picked on the validation set using Youden's J.</span></li>
+      <li><strong>Explain</strong><span>Grad-CAM heatmap marks the retinal regions behind the prediction.</span></li>
+      <li><strong>Serve</strong><span>Flask app takes an uploaded image and returns verdict, probability and heatmap.</span></li>
+    </ol>
+  </section>
+
+  <section id="lab-section">
+    <h2 id="lab-title">Preprocessing lab</h2>
+    <p class="muted">Runs entirely in your browser. Nothing is uploaded. It shows the same kind of input preparation the model receives: the 224×224 resize, plus the green channel and a contrast stretch, where blood vessels and the optic disc stand out most.</p>
+    <div id="drop" tabindex="0" role="button" aria-label="Choose a retinal image"><strong id="dropTitle">Drop a fundus image here, or click to browse</strong><br><span class="muted">JPG or PNG</span><input id="file" type="file" accept="image/*" hidden></div>
+    <div id="lab" class="grid">
+      <figure><canvas id="c0"></canvas><figcaption>Original</figcaption></figure>
+      <figure><canvas id="c1"></canvas><figcaption>Model input, 224×224</figcaption></figure>
+      <figure><canvas id="c2"></canvas><figcaption>Green channel</figcaption></figure>
+      <figure><canvas id="c3"></canvas><figcaption>Green channel, contrast stretched</figcaption></figure>
+    </div>
+  </section>
+
+  <section>
+    <h2>Run the full model</h2>
+    <p>This page is the project overview. Predictions come from the trained PyTorch model, which runs from the repository:</p>
+<pre>pip install -r requirements.txt
+bash prepare_data.sh archive.zip
+python train.py
+python evaluate.py
+python app.py</pre>
+  </section>
+</main>
+
+<footer><div class="wrap">RetinaLens is a student research project and not a medical device. It does not replace an eye examination by a qualified clinician.</div></footer>
+
+<script>
+const $=id=>document.getElementById(id);
+const drop=$('drop'), input=$('file');
+drop.onclick=()=>input.click();
+drop.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();input.click();}};
+['dragover','dragenter'].forEach(t=>drop.addEventListener(t,e=>{e.preventDefault();drop.classList.add('over');}));
+['dragleave','drop'].forEach(t=>drop.addEventListener(t,e=>{e.preventDefault();drop.classList.remove('over');}));
+drop.addEventListener('drop',e=>load(e.dataTransfer.files[0]));
+input.onchange=e=>load(e.target.files[0]);
+
+function load(f){
+  if(!f||!f.type.startsWith('image/')){$('dropTitle').textContent='Please choose a JPG or PNG image.';return;}
+  $('dropTitle').textContent=f.name;
+  const img=new Image();
+  img.onload=()=>{render(img);URL.revokeObjectURL(img.src);};
+  img.src=URL.createObjectURL(f);
+}
+function setup(id,w,h){const c=$(id);c.width=w;c.height=h;return c.getContext('2d');}
+function render(img){
+  const W=Math.min(img.width,512), H=Math.round(W*img.height/img.width);
+  setup('c0',W,H).drawImage(img,0,0,W,H);
+  setup('c1',224,224).drawImage(img,0,0,224,224);
+  const g=setup('c2',224,224), s=setup('c3',224,224);
+  const src=$('c1').getContext('2d').getImageData(0,0,224,224), d=src.data;
+  const green=new Uint8ClampedArray(224*224);
+  for(let i=0;i<green.length;i++) green[i]=d[i*4+1];
+  const gi=g.createImageData(224,224); fill(gi,green); g.putImageData(gi,0,0);
+  // 2nd-98th percentile contrast stretch
+  const sorted=Array.from(green).filter(v=>v>10).sort((a,b)=>a-b);
+  const lo=sorted[Math.floor(sorted.length*.02)]||0, hi=sorted[Math.floor(sorted.length*.98)]||255;
+  const st=new Uint8ClampedArray(green.length);
+  for(let i=0;i<green.length;i++) st[i]=green[i]<=10?0:((green[i]-lo)/Math.max(1,hi-lo))*255;
+  const si=s.createImageData(224,224); fill(si,st); s.putImageData(si,0,0);
+  $('lab').style.display='grid';
+}
+function fill(im,arr){for(let i=0;i<arr.length;i++){im.data[i*4]=im.data[i*4+1]=im.data[i*4+2]=arr[i];im.data[i*4+3]=255;}}
+</script>
+</body>
+</html>
